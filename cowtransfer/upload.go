@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/qiniu/api.v7/v7/storage"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -105,32 +104,23 @@ func (c *Client) beforeUpload(file string, size int64, prepare *prepareSendRespo
 	return r.ExpireAt, nil
 }
 
-func (c *Client) upload(file string, prepare *prepareSendResponse, size int64) error {
-	var uploader *storage.ResumeUploader
-	uploader = storage.NewResumeUploader(&storage.Config{
-		Zone:          &storage.ZoneHuadong,
-		UseHTTPS:      true,
-		UseCdnDomains: true,
-	})
-
+func (c *Client) upload(file string, prepare *prepareSendResponse, size int64, log chan string) error {
 	var current int64
-	prog := make([]storage.BlkputRet, storage.BlockCount(size))
-	ret := storage.PutRet{}
-	err := uploader.PutFile(
+	prog := make([]blockPutReturn, blockCount(size))
+	err := putFile(
 		context.Background(),
-		&ret,
 		prepare.Uptoken,
 		prepare.Prefix+"/"+prepare.TransferGUID+"/"+path.Base(file),
 		file,
-		&storage.RputExtra{
+		&rPutExtra{
 			Progresses: prog,
-			Notify: func(blkIdx int, blkSize int, ret *storage.BlkputRet) {
+			Notify: func(blkIdx int, blkSize int, ret *blockPutReturn) {
 				current += int64(blkSize)
 				prog[blkIdx] = *ret
-				fmt.Printf("[%d%%] Block %d written\n", current*100/size, blkIdx)
+				log <- fmt.Sprintf("[%d%%] Block %d written", current*100/size, blkIdx)
 			},
 			NotifyErr: func(blkIdx int, blkSize int, err error) {
-				fmt.Printf("Failed to write write block %d of %s: %v\n", blkIdx, path.Base(file), err)
+				log <- fmt.Sprintf("Failed to write write block %d of %s: %v\n", blkIdx, path.Base(file), err)
 			},
 		},
 	)
@@ -186,12 +176,12 @@ func (c *Client) complete(guid string) (string, error) {
 	return r.TempDownloadCode, nil
 }
 
-func (c *Client) Upload(files []string) error {
+func (c *Client) Upload(files []string, log chan string) error {
 	prepare, err := c.prepareSend(files)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("UniqueUrl: %s\n", prepare.UniqueUrl)
+	log <- fmt.Sprintf("UniqueUrl: %s", prepare.UniqueUrl)
 
 	for i, file := range files {
 		info, err := os.Stat(file)
@@ -203,10 +193,10 @@ func (c *Client) Upload(files []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("[File #%d] Expire: %s hours\n", i+1, expire)
+		log <- fmt.Sprintf("[File #%d] Expire: %s hours", i+1, expire)
 
-		fmt.Printf("[File #%d] Uploading %s...\n", i+1, info.Name())
-		err = c.upload(file, prepare, info.Size())
+		log <- fmt.Sprintf("[File #%d] Uploading %s...", i+1, info.Name())
+		err = c.upload(file, prepare, info.Size(), log)
 		if err != nil {
 			return err
 		}
@@ -215,7 +205,7 @@ func (c *Client) Upload(files []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("[File #%d] %s Ok: %v\n", i+1, info.Name(), ok)
+		log <- fmt.Sprintf("[File #%d] %s Ok: %v", i+1, info.Name(), ok)
 	}
 
 	code, err := c.complete(prepare.TransferGUID)

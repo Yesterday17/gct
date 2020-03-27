@@ -19,7 +19,13 @@ func main() {
 		panic(err)
 	}
 
-	err = c.Upload(os.Args[1:])
+	log := make(chan string, 20)
+	go func() {
+		for {
+			fmt.Println(<-log)
+		}
+	}()
+	err = c.Upload(os.Args[1:], log)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
