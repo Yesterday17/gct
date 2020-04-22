@@ -38,7 +38,7 @@ func (c *Client) prepareSend(files []string) (*prepareSendResponse, error) {
 		"message":             []string{},
 		"notifyEmail":         []string{},
 		"validDays":           []string{"7"},
-		"sendToMyCloud":       []string{},
+		"saveToMyCloud":       []string{"false"},
 		"downloadTimes":       []string{"-1"},
 		"smsReceivers":        []string{},
 		"emailReceivers":      []string{},

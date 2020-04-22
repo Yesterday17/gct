@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -50,8 +51,11 @@ func (c *Client) postForm(url string, body url.Values) (*http.Response, error) {
 
 	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
 	req.Header.Set("Host", "cowtransfer.com")
+	req.Header.Set("Origin", "https://cowtransfer.com")
+	req.Header.Set("Referer", "https://cowtransfer.com")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36")
 	req.Header.Set("Cookie", c.Cookie())
+	req.Header.Set("Content-Length", strconv.Itoa(b.Len()))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -83,9 +87,14 @@ func detectContentType(filename string) (string, error) {
 
 func (c *Client) Cookie() string {
 	var cookies string
+	var count int
 
 	for k, v := range c.cookie {
-		cookies += k + "=" + v + "; "
+		if count > 0 {
+			cookies += ";"
+		}
+		cookies += k + "=" + v
+		count++
 	}
 	return cookies
 }
